@@ -10,7 +10,7 @@ expression: popup
                            latency for general-purpose tasks
   3. High                  Maximizes reasoning depth for complex or ambiguous
                            problems
-› 4. Extra high (current)  Extra high reasoning for complex problems
+❯ 4. Extra high (current)  Extra high reasoning for complex problems
                            ⚠ Extra high reasoning effort can quickly consume
                            Plus plan rate limits.
 

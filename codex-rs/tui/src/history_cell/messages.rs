@@ -2,6 +2,7 @@
 
 use super::markdown_render_cache::MarkdownRenderCache;
 use super::*;
+use crate::ui_consts::CHEVRON;
 
 #[derive(Debug)]
 pub(crate) struct UserHistoryCell {
@@ -172,7 +173,7 @@ impl HistoryCell for UserHistoryCell {
             return Vec::new();
         }
 
-        let mut lines: Vec<Line<'static>> = vec![Line::from("").style(style)];
+        let mut lines: Vec<Line<'static>> = Vec::new();
 
         if let Some(wrapped_remote_images) = wrapped_remote_images {
             lines.extend(prefix_lines(
@@ -188,12 +189,11 @@ impl HistoryCell for UserHistoryCell {
         if let Some(wrapped_message) = wrapped_message {
             lines.extend(prefix_lines(
                 wrapped_message,
-                "› ".bold().dim(),
+                format!("{CHEVRON} ").bold().dim(),
                 "  ".into(),
             ));
         }
 
-        lines.push(Line::from("").style(style));
         lines
     }
 

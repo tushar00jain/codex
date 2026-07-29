@@ -1,6 +1,5 @@
 ---
 source: tui/src/chatwidget/tests/popups_and_settings.rs
-assertion_line: 473
 expression: popup
 ---
   Plugins
@@ -10,6 +9,6 @@ expression: popup
   All Plugins  Installed (0)  OpenAI Curated  Workspace  [Debug Marketplace]  Add Marketplace
 
   Type to search plugins
-› [-] Debug Plugin  Available   Press Enter to install or view plugin details.
+❯ [-] Debug Plugin  Available   Press Enter to install or view plugin details.
 
   ctrl + u upgrade · ctrl + r remove · space toggle · ←/→ tabs · enter details · esc close

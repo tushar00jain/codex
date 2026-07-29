@@ -8,7 +8,7 @@ expression: "render_lines(&view, 96)"
                                                                                                 
   Type to search skills                                                                         
   >                                                                                             
-› [x] superpowers-systematic-debugging (polish)            Find root causes before fixing bugs  
+❯ [x] superpowers-systematic-debugging (polish)            Find root causes before fixing bugs  
   [ ] superpowers-verification-before-completion (polish)  Verify completion before claiming …  
                                                                                                 
   Press space or enter to toggle; esc to close

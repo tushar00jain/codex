@@ -8,7 +8,7 @@ expression: rendered
   Codex may add files to your current project folder.
   Your existing setup will not be changed.
   Home
-  › [x] Settings
+  ❯ [x] Settings
         Import /Users/alex/.claude/settings.json into /Users/alex/.codex/conf…
     [x] Memory
         Import memory files from /Users/alex/.claude/projects to /Users/alex/…

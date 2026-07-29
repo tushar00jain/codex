@@ -10,3 +10,8 @@
 pub(crate) const LIVE_PREFIX_COLS: u16 = 2;
 pub(crate) const FOOTER_INDENT_COLS: usize = LIVE_PREFIX_COLS as usize;
 pub(crate) const TRANSCRIPT_HINT: &str = "ctrl + t to view transcript";
+
+/// The chevron pointer: the composer's input prompt, the prefix on sent
+/// messages in history, and the cursor marking the highlighted row in
+/// selection lists and pickers. One glyph so they all read as the same mark.
+pub(crate) const CHEVRON: &str = "❯";

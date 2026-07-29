@@ -173,6 +173,7 @@ use crate::key_hint;
 use crate::key_hint::KeyBinding;
 use crate::key_hint::has_ctrl_or_alt;
 use crate::line_truncation::truncate_line_with_ellipsis_if_overflow;
+use crate::ui_consts::CHEVRON;
 use crate::ui_consts::FOOTER_INDENT_COLS;
 use codex_message_history::HistoryBatchCursor;
 use crossterm::event::KeyCode;
@@ -251,11 +252,12 @@ use crate::keymap::RuntimeKeymap;
 use crate::keymap::VimNormalKeymap;
 use crate::keymap::primary_binding;
 use crate::onboarding::mark_underlined_hyperlink;
+use crate::render::BlockExt;
 use crate::render::Insets;
 use crate::render::RectExt;
 use crate::render::renderable::Renderable;
 use crate::slash_command::SlashCommand;
-use crate::style::user_message_style;
+use crate::style::hairline_rule_style;
 use codex_protocol::ThreadId;
 use codex_protocol::user_input::ByteRange;
 use codex_protocol::user_input::MAX_USER_INPUT_TEXT_CHARS;
@@ -4702,11 +4704,10 @@ impl ChatComposer {
                 }
             }
         }
-        let style = user_message_style();
-        Block::default().style(style).render_ref(composer_rect, buf);
+        let style = hairline_rule_style();
+        Block::default().hairline(style).render_ref(composer_rect, buf);
         if !remote_images_rect.is_empty() {
             Paragraph::new(self.attachments.remote_image_lines())
-                .style(style)
                 .render_ref(remote_images_rect, buf);
         }
         if !textarea_rect.is_empty() {
@@ -4721,10 +4722,10 @@ impl ChatComposer {
                         .unwrap_or(1.0);
                     tier.prompt(charge)
                 } else {
-                    "›".bold()
+                    CHEVRON.bold()
                 }
             } else {
-                "›".dim()
+                CHEVRON.dim()
             };
             buf.set_span(
                 textarea_rect.x - LIVE_PREFIX_COLS,
@@ -4937,11 +4938,12 @@ mod tests {
             "expected a spacing row above the footer hints",
         );
 
+        // The composer's lower hairline rule occupies this row now; it replaced the
+        // blank padding that used to sit here.
         let spacing_row = row_to_string(hint_row_idx - 1);
-        assert_eq!(
-            spacing_row.trim(),
-            "",
-            "expected blank spacing row above hints but saw: {spacing_row:?}",
+        assert!(
+            spacing_row.trim_start().starts_with('\u{2500}'),
+            "expected the composer's lower rule above the hints but saw: {spacing_row:?}",
         );
     }
 

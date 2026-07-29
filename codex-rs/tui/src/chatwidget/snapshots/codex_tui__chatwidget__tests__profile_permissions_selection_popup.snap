@@ -4,7 +4,7 @@ expression: "render_bottom_popup(&chat, 80)"
 ---
   Update Model Permissions
 
-› 1. Ask for approval (current)  Codex can read and edit files in the current
+❯ 1. Ask for approval (current)  Codex can read and edit files in the current
                                  workspace, and run commands. Approval is
                                  required to access the internet or edit other
                                  files.

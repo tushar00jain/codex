@@ -20,6 +20,7 @@ use crate::render::RectExt as _;
 use crate::render::renderable::ColumnRenderable;
 use crate::render::renderable::Renderable;
 use crate::style::user_message_style;
+use crate::ui_consts::CHEVRON;
 
 use codex_features::Feature;
 
@@ -90,9 +91,9 @@ impl ExperimentalFeaturesView {
         let selected_idx = self.state.selected_idx;
         for (idx, item) in self.features.iter().enumerate() {
             let prefix = if selected_idx == Some(idx) {
-                '›'
+                CHEVRON
             } else {
-                ' '
+                " "
             };
             let marker = if item.enabled { 'x' } else { ' ' };
             let name = format!("{prefix} [{marker}] {}", item.name);

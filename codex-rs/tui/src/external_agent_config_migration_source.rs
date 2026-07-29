@@ -6,6 +6,7 @@ use crate::render::renderable::RenderableExt as _;
 use crate::tui::FrameRequester;
 use crate::tui::Tui;
 use crate::tui::TuiEvent;
+use crate::ui_consts::CHEVRON;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
@@ -169,7 +170,7 @@ impl WidgetRef for &ExternalAgentConfigSourceScreen {
         column.push("");
         for (index, source) in self.sources.iter().enumerate() {
             let prefix = if index == self.highlighted_idx {
-                "›"
+                CHEVRON
             } else {
                 " "
             };

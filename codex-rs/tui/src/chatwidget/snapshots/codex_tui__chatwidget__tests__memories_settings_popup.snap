@@ -5,7 +5,7 @@ expression: popup
   Memories
   Choose how Codex uses and creates memories. Changes are saved to config.toml
 
-› [x] Use memories       Use memories in the following threads. Applied at
+❯ [x] Use memories       Use memories in the following threads. Applied at
                          next thread.
   [ ] Generate memories  Generate memories from the following threads. Current
                          thread included.
