@@ -2120,7 +2120,10 @@ fn user_history_cell_trims_trailing_blank_message_lines() {
         .rev()
         .take_while(|line| line.trim().is_empty())
         .count();
-    assert_eq!(trailing_blank_count, 1);
+    // Zero, not one: the cell no longer appends a padding row, so the only way a
+    // trailing blank appears is if the message's own trailing blanks stopped being
+    // trimmed -- which is what this test guards.
+    assert_eq!(trailing_blank_count, 0);
     assert!(rendered.iter().any(|line| line.contains("line one")));
 }
 
@@ -2143,7 +2146,10 @@ fn user_history_cell_trims_trailing_blank_message_lines_with_text_elements() {
         .rev()
         .take_while(|line| line.trim().is_empty())
         .count();
-    assert_eq!(trailing_blank_count, 1);
+    // Zero, not one: the cell no longer appends a padding row, so the only way a
+    // trailing blank appears is if the message's own trailing blanks stopped being
+    // trimmed -- which is what this test guards.
+    assert_eq!(trailing_blank_count, 0);
     assert!(rendered.iter().any(|line| line.contains("tokenized")));
 }
 

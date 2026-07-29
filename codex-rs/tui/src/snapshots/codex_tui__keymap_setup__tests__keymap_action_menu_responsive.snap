@@ -10,7 +10,7 @@ expression: snapshot
   Config `tui.keymap.global.open_transcript`
   Open the transcript overlay.
 
-› 1. Replace binding
+❯ 1. Replace binding
      Capture one key and replace `ctrl-t`.
   2. Add alternate binding
      Keep the current binding and add another
@@ -32,7 +32,7 @@ expression: snapshot
   Config `tui.keymap.global.open_transcript`
   Open the transcript overlay.
 
-› 1. Replace binding
+❯ 1. Replace binding
      Capture one key and replace `ctrl-t`.
   2. Add alternate binding
      Keep the current binding and add another key.
@@ -52,7 +52,7 @@ expression: snapshot
   Config `tui.keymap.global.open_transcript`
   Open the transcript overlay.
 
-› 1. Replace binding                   Capture one key and replace `ctrl-t`.
+❯ 1. Replace binding                   Capture one key and replace `ctrl-t`.
   2. Add alternate binding             Keep the current binding and add another key.
   –  Remove custom binding (disabled)  No custom root override to remove.
   3. Back to shortcuts                 Return to the shortcut list.

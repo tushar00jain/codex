@@ -5,7 +5,7 @@ expression: popup
   Experimental features
   Toggle experimental features. Changes are saved to config.toml.
 
-› [ ] JavaScript REPL  Enable a persistent Node-backed JavaScript REPL for
+❯ [ ] JavaScript REPL  Enable a persistent Node-backed JavaScript REPL for
                        interactive website debugging and other inline
                        JavaScript execution capabilities.
   [x] Shell tool       Allow the model to run shell commands.

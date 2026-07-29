@@ -32,6 +32,12 @@ pub(crate) fn accent_style() -> Style {
     accent_style_for(default_bg())
 }
 
+/// Returns the style for the hairline rules that bracket an input surface.
+/// Secondary chrome is `dim` per `styles.md`; no custom colors.
+pub(crate) fn hairline_rule_style() -> Style {
+    Style::default().dim()
+}
+
 /// Returns the style for a user-authored message using the provided terminal background.
 pub fn user_message_style_for(terminal_bg: Option<(u8, u8, u8)>) -> Style {
     match terminal_bg {
