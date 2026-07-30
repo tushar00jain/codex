@@ -14,6 +14,7 @@ pub(crate) fn card_inner_width(width: u16, max_inner_width: usize) -> Option<usi
 }
 
 /// Render `lines` inside a border sized to the widest span in the content.
+#[allow(dead_code)] // Kept for upstream parity; the session header draws a logo instead.
 pub(crate) fn with_border(lines: Vec<Line<'static>>) -> Vec<Line<'static>> {
     with_border_internal(lines, /*forced_inner_width*/ None)
 }
@@ -395,7 +396,7 @@ impl HistoryCell for SessionHeaderHistoryCell {
             .into_iter()
             .map(|line| truncate_line_with_ellipsis_if_overflow(line, inner_width))
             .collect();
-        with_border(lines)
+        super::banner::with_logo(lines, width)
     }
 
     fn raw_lines(&self) -> Vec<Line<'static>> {
