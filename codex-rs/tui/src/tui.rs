@@ -487,7 +487,10 @@ pub(crate) fn init() -> Result<InitializedTerminal> {
     #[cfg(windows)]
     probe_windows_default_colors();
 
-    let tui = CustomTerminal::with_options_and_cursor_position(backend, cursor_pos)?;
+    let mut tui = CustomTerminal::with_options_and_cursor_position(backend, cursor_pos)?;
+    // Take the screen: scroll prior output into scrollback so the banner sits near
+    // the top and the composer at the bottom, with the gap between for history.
+    tui.claim_screen()?;
     let stderr_guard = terminal_stderr::TerminalStderrGuard::install()?;
     Ok(InitializedTerminal {
         terminal: tui,
@@ -860,14 +863,40 @@ impl Tui {
         area.width = size.width;
         let mut needs_full_repaint = false;
 
-        if area.bottom() > size.height {
-            let scroll_by = area.bottom() - size.height;
-            if !terminal_height_shrank {
+        // Seat the composer at the bottom and keep it there as its height changes.
+        if let Some(bottom_y) = terminal.bottom_aligned_y(area.height, size.height) {
+            // A growing composer moves the viewport top upward. Any history in the
+            // rows it takes must be scrolled away first -- otherwise the viewport
+            // paints over rows that never reached scrollback and that content is
+            // simply lost. The `area.bottom() > size.height` branch below cannot do
+            // this: bottom_aligned_y makes bottom equal size.height exactly, so it
+            // never fires.
+            let region_top = terminal.viewport_area.top();
+            let overlap = terminal.history_end_row().saturating_sub(bottom_y);
+            if overlap > 0 {
                 terminal
                     .backend_mut()
-                    .scroll_region_up(0..area.top(), scroll_by)?;
+                    .scroll_region_up(0..region_top, overlap)?;
+                terminal.note_history_scrolled(overlap);
             }
-            area.y = size.height - area.height;
+            area.y = bottom_y;
+        }
+
+        if area.bottom() > size.height {
+            let bottom_y = size.height - area.height;
+            // Scroll only the rows the viewport actually has to take from history.
+            // Blank rows below the last history row need no scroll -- scrolling them
+            // would push the session header off the top for nothing. Anything the
+            // viewport does claim must scroll, or it would paint over history that
+            // never reached scrollback.
+            let overlap = terminal.history_end_row().saturating_sub(bottom_y);
+            if !terminal_height_shrank && overlap > 0 {
+                terminal
+                    .backend_mut()
+                    .scroll_region_up(0..area.top(), overlap)?;
+                terminal.note_history_scrolled(overlap);
+            }
+            area.y = bottom_y;
         } else if terminal_height_grew && viewport_was_bottom_aligned {
             area.y = size.height - area.height;
         }
@@ -944,12 +973,31 @@ impl Tui {
             let mut area = terminal.viewport_area;
             area.height = height.min(size.height);
             area.width = size.width;
-            // If the viewport has expanded, scroll everything else up to make room.
+            // Seat the composer at the bottom and keep it there as its height changes.
+            // See the reflow path for why the overlap must scroll here.
+            if let Some(bottom_y) = terminal.bottom_aligned_y(area.height, size.height) {
+                let region_top = terminal.viewport_area.top();
+                let overlap = terminal.history_end_row().saturating_sub(bottom_y);
+                if overlap > 0 {
+                    terminal
+                        .backend_mut()
+                        .scroll_region_up(0..region_top, overlap)?;
+                    terminal.note_history_scrolled(overlap);
+                }
+                area.y = bottom_y;
+            }
+            // If the viewport has expanded, make room for it. See the reflow path for
+            // why only the overlap with history scrolls.
             if area.bottom() > size.height {
-                terminal
-                    .backend_mut()
-                    .scroll_region_up(0..area.top(), area.bottom() - size.height)?;
-                area.y = size.height - area.height;
+                let bottom_y = size.height - area.height;
+                let overlap = terminal.history_end_row().saturating_sub(bottom_y);
+                if overlap > 0 {
+                    terminal
+                        .backend_mut()
+                        .scroll_region_up(0..area.top(), overlap)?;
+                    terminal.note_history_scrolled(overlap);
+                }
+                area.y = bottom_y;
             }
             if area != terminal.viewport_area {
                 // On startup, the old viewport can still be empty. Clear from the

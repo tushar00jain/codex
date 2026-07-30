@@ -1579,7 +1579,12 @@ fn session_header_clamps_to_narrow_width() {
     let lines = cell.display_lines(WIDTH);
     let widths = lines.iter().map(line_width).collect::<Vec<_>>();
 
-    assert_eq!(widths, vec![usize::from(WIDTH); lines.len()]);
+    // The header is no longer a bordered card, so rows are their natural width rather
+    // than padded out to draw a right border. What matters is that none overflows.
+    assert!(
+        widths.iter().all(|width| *width <= usize::from(WIDTH)),
+        "no row may exceed {WIDTH} columns, got {widths:?}"
+    );
     insta::assert_snapshot!(render_lines(&lines).join("\n"));
 }
 

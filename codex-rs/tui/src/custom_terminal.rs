@@ -174,8 +174,21 @@ where
     /// Last known position of the cursor. Used to find the new area when the viewport is inlined
     /// and the terminal resized.
     pub last_known_cursor_pos: Position,
-    /// Count of visible history rows rendered above the viewport in inline mode.
-    visible_history_rows: u16,
+    /// Row where this session's history starts: the cursor row at launch.
+    ///
+    /// Rows above it belong to whatever was on screen before Codex started, so
+    /// history must never be written there.
+    history_origin_row: u16,
+    /// First screen row below this session's history -- where the next history row
+    /// goes. An absolute row rather than a count, because a count cannot survive the
+    /// viewport growing upward: clamping it to the new viewport top silently forgets
+    /// that rows below the top still hold history, and the viewport then paints over
+    /// them instead of scrolling them away.
+    ///
+    /// Invariant: `history_origin_row <= history_end_row <= viewport_area.top()`.
+    history_end_row: u16,
+    /// Whether the inline viewport has been dropped to the bottom of the screen.
+    bottom_anchored: bool,
     #[cfg(test)]
     screen_size_override: Option<Size>,
 }
@@ -254,7 +267,9 @@ where
             ),
             last_known_screen_size: screen_size,
             last_known_cursor_pos: cursor_pos,
-            visible_history_rows: 0,
+            history_origin_row: cursor_pos.y,
+            history_end_row: cursor_pos.y,
+            bottom_anchored: false,
             #[cfg(test)]
             screen_size_override: None,
         }
@@ -337,7 +352,9 @@ where
         self.current_buffer_mut().resize(area);
         self.previous_buffer_mut().resize(area);
         self.viewport_area = area;
-        self.visible_history_rows = self.visible_history_rows.min(area.top());
+        // Callers must scroll any overlap away before moving the viewport up over
+        // history (see `history_end_row`), so this only enforces the invariant.
+        self.history_end_row = self.history_end_row.min(area.top());
     }
 
     /// Queries the backend for size and resizes if it doesn't match the previous size.
@@ -529,7 +546,9 @@ where
         self.backend.clear_region(ClearType::All)?;
         self.set_cursor_position(home)?;
         std::io::Write::flush(&mut self.backend)?;
-        self.visible_history_rows = 0;
+        // The screen is blank now, so history may start from the very top again.
+        self.history_origin_row = 0;
+        self.history_end_row = 0;
         self.previous_buffer_mut().reset();
         Ok(())
     }
@@ -548,16 +567,127 @@ where
         write!(self.backend, "\x1b[r\x1b[0m\x1b[H\x1b[2J\x1b[3J\x1b[H")?;
         std::io::Write::flush(&mut self.backend)?;
         self.last_known_cursor_pos = Position { x: 0, y: 0 };
-        self.visible_history_rows = 0;
+        // The screen is blank now, so history may start from the very top again.
+        self.history_origin_row = 0;
+        self.history_end_row = 0;
         self.previous_buffer_mut().reset();
         Ok(())
     }
 
     pub(crate) fn note_history_rows_inserted(&mut self, inserted_rows: u16) {
-        self.visible_history_rows = self
-            .visible_history_rows
+        self.history_end_row = self
+            .history_end_row
             .saturating_add(inserted_rows)
             .min(self.viewport_area.top());
+    }
+
+    /// Records that the region above the viewport scrolled up by `rows`, moving this
+    /// session's history up with it.
+    pub(crate) fn note_history_scrolled(&mut self, rows: u16) {
+        self.history_end_row = self.history_end_row.saturating_sub(rows);
+        self.history_origin_row = self.history_origin_row.min(self.history_end_row);
+    }
+
+    /// First screen row below this session's history.
+    pub(crate) fn history_end_row(&self) -> u16 {
+        self.history_end_row
+    }
+
+    /// Row the next history line should be written to while blank rows remain
+    /// between the last history row and the viewport.
+    ///
+    /// `None` once history reaches the viewport, meaning callers must scroll the
+    /// region above instead.
+    pub(crate) fn next_history_row(&self) -> Option<u16> {
+        (self.history_end_row < self.viewport_area.top()).then_some(self.history_end_row)
+    }
+
+    /// Frees the screen by scrolling what was already on it into scrollback, so the
+    /// banner can sit near the top and the composer at the bottom.
+    ///
+    /// Scrolls by exactly the launch cursor row -- the number of occupied rows --
+    /// using newlines on the last row, which is what makes a terminal commit the
+    /// departing row to scrollback. (`SU`/`ESC[nS` scrolls but discards those rows,
+    /// which silently ate the user's shell prompt.) Contrast walking to the bottom
+    /// with a screenful of newlines: on a nearly empty screen that pushes one real
+    /// line plus a screenful of blanks into scrollback and makes it useless.
+    ///
+    /// History then starts at `TOP_MARGIN_ROWS`, not row 0: some terminals pin the
+    /// last shell prompt to the top of the viewport (tscode does), and anything drawn
+    /// on row 0 renders underneath it. One row of margin costs nothing and keeps the
+    /// banner visible everywhere.
+    pub(crate) fn claim_screen(&mut self) -> io::Result<()> {
+        /// Rows left untouched at the top of the screen.
+        const TOP_MARGIN_ROWS: u16 = 1;
+
+        let occupied_rows = self.history_origin_row;
+        if occupied_rows > 0 {
+            let last_row = self.last_known_screen_size.height.saturating_sub(1);
+            queue!(self.backend, MoveTo(/*x*/ 0, last_row))?;
+            for _ in 0..occupied_rows {
+                queue!(self.backend, Print("\n"))?;
+            }
+            std::io::Write::flush(&mut self.backend)?;
+        }
+        // The screen is blank now; everything shifted up by `occupied_rows`.
+        self.viewport_area.y = self
+            .viewport_area
+            .y
+            .saturating_sub(occupied_rows)
+            .max(TOP_MARGIN_ROWS);
+        self.history_origin_row = TOP_MARGIN_ROWS;
+        // The screen is blank now, so history has not reached any row yet. Leaving
+        // this at the launch cursor row would make the bottom anchor believe history
+        // already exists and fire on the first draw, dragging the not-yet-committed
+        // session header down with the composer -- and it would report a gap over
+        // rows that were just blanked.
+        self.history_end_row = TOP_MARGIN_ROWS;
+        self.last_known_cursor_pos = Position {
+            x: 0,
+            y: TOP_MARGIN_ROWS,
+        };
+        Ok(())
+    }
+
+    /// Row the viewport should sit at to be flush with the bottom of the screen, or
+    /// `None` while it should stay where it is.
+    ///
+    /// Seats the composer at the bottom once history has reached scrollback, then
+    /// keeps it there as its height changes. Letting a shrinking composer float
+    /// upward leaves dead rows beneath it, and it also stops history insertion from
+    /// recognizing the gap: `insert_history` decides the viewport is bottom-anchored
+    /// by comparing `area.bottom()` against the screen height, so a floating viewport
+    /// takes the push-the-viewport-down branch and writes just above the composer
+    /// instead of filling the gap.
+    pub(crate) fn bottom_aligned_y(&mut self, height: u16, screen_height: u16) -> Option<u16> {
+        if let Some(bottom_y) = self.take_bottom_anchor(height, screen_height) {
+            return Some(bottom_y);
+        }
+        self.bottom_anchored
+            .then(|| screen_height.saturating_sub(height))
+    }
+
+    /// Drops the viewport to the bottom of the screen, once, at the first draw.
+    ///
+    /// Returns the new `y`, or `None` if it has already been claimed or the
+    /// viewport is at or below that row. Rows between the launch cursor and the
+    /// bottom are blank, so this claims them without scrolling -- anything on
+    /// screen above the launch point stays put. It never moves the viewport up,
+    /// leaving a launch near the bottom to the caller's overflow handling.
+    pub(crate) fn take_bottom_anchor(&mut self, height: u16, screen_height: u16) -> Option<u16> {
+        if self.bottom_anchored {
+            return None;
+        }
+        // Wait for the first history to reach scrollback. Before that the session
+        // header is still inside the viewport, so anchoring would drag it to the
+        // bottom along with the composer and open the gap above it instead of
+        // between them. Deliberately does not consume the flag.
+        if self.history_end_row == self.history_origin_row {
+            return None;
+        }
+        self.bottom_anchored = true;
+        let bottom_y = screen_height.saturating_sub(height);
+        (bottom_y > self.viewport_area.y).then_some(bottom_y)
     }
 
     /// Clears the inactive buffer and swaps it with the current buffer
@@ -1031,5 +1161,200 @@ mod tests {
             actual.contains(&expected),
             "expected terminal output to contain cursor style reset {expected:?}, got {actual:?}"
         );
+    }
+
+    /// Terminal launched with `prior_rows` of shell output already on screen.
+    fn launched_at(
+        width: u16,
+        height: u16,
+        prior_rows: u16,
+    ) -> Terminal<crate::test_backend::VT100Backend> {
+        Terminal::with_screen_size_and_cursor_position_for_test(
+            crate::test_backend::VT100Backend::new(width, height),
+            Size::new(width, height),
+            Position::new(/*x*/ 0, prior_rows),
+        )
+    }
+
+    #[test]
+    fn claim_screen_blanks_the_screen_and_leaves_a_one_row_top_margin() {
+        let (width, height) = (20u16, 10u16);
+        let mut term = launched_at(width, height, /*prior_rows*/ 3);
+        write!(term.backend_mut(), "one\r\ntwo\r\nthree").expect("seed prior output");
+
+        term.claim_screen().expect("claim screen");
+
+        // Row 1, not row 0: some terminals pin the shell prompt to the top of the
+        // viewport, and anything drawn on row 0 renders underneath it.
+        assert_eq!(term.viewport_area.y, 1, "expected a one-row top margin");
+
+        // The prior rows scrolled away, so nothing is left on the visible screen.
+        let screen = term.backend().vt100().screen();
+        for row in 0..height {
+            let text: String = (0..width)
+                .filter_map(|col| screen.cell(row, col))
+                .map(|cell| cell.contents())
+                .collect();
+            assert!(
+                text.trim().is_empty(),
+                "row {row} should be blank after claiming the screen, got {text:?}"
+            );
+        }
+    }
+
+    /// Regression: `claim_screen` blanks the screen, so history must be reported as
+    /// reaching no row yet. Leaving the end row at the launch cursor made the bottom
+    /// anchor fire on the first draw -- dragging the not-yet-committed session header
+    /// to the bottom -- and made the gap span rows that had just been blanked. It only
+    /// showed up when launching from a busy terminal, so the header's position
+    /// appeared to change at random.
+    #[test]
+    fn claim_screen_reports_no_history_regardless_of_launch_row() {
+        let (width, height) = (20u16, 39u16);
+
+        for prior_rows in [0u16, 1, 20, 38] {
+            let mut term = launched_at(width, height, prior_rows);
+
+            term.claim_screen().expect("claim screen");
+
+            assert_eq!(
+                term.history_end_row(),
+                1,
+                "launching at row {prior_rows} must still leave history at the margin"
+            );
+            // Equal to the origin, so the anchor waits for real history instead of
+            // firing on the first draw.
+            assert_eq!(
+                term.bottom_aligned_y(/*height*/ 10, height),
+                None,
+                "launching at row {prior_rows} must not anchor before history exists"
+            );
+        }
+    }
+
+    /// Regression: a growing composer moves the viewport top upward, and the rows it
+    /// takes may hold history. Callers must scroll that overlap away before moving --
+    /// the `area.bottom() > size.height` branch cannot catch it, because
+    /// `bottom_aligned_y` makes bottom equal the screen height exactly so that branch
+    /// never fires. Missing the scroll painted over the user's prompt.
+    #[test]
+    fn growing_composer_reports_the_overlap_it_takes_from_history() {
+        let (width, height) = (20u16, 39u16);
+        let mut term = launched_at(width, height, /*prior_rows*/ 1);
+
+        // Composer 5 rows tall at the bottom, history filling right up to it.
+        term.set_viewport_area(Rect::new(/*x*/ 0, 34, width, 5));
+        term.note_history_rows_inserted(33);
+        assert_eq!(term.history_end_row(), 34, "history reaches the composer");
+
+        // It grows to 7 rows, so the top moves 34 -> 32 and claims two rows of
+        // history. The caller must see a two-row overlap to scroll.
+        let bottom_y = term
+            .bottom_aligned_y(/*height*/ 7, height)
+            .expect("anchored viewport reports a bottom row");
+        assert_eq!(bottom_y, 32);
+        assert_eq!(
+            term.history_end_row().saturating_sub(bottom_y),
+            2,
+            "two rows of history are in the growing composer's way"
+        );
+
+        // Once scrolled and recorded, history ends exactly where the composer starts.
+        term.note_history_scrolled(2);
+        term.set_viewport_area(Rect::new(/*x*/ 0, bottom_y, width, 7));
+        assert_eq!(term.history_end_row(), bottom_y);
+    }
+
+    /// Regression: a count of history rows cannot survive the viewport growing
+    /// upward. `set_viewport_area` clamps the occupancy to the new viewport top, so a
+    /// count silently forgot that rows below the top still held history -- the
+    /// viewport then painted over them and the user's prompt and command output
+    /// disappeared instead of scrolling into scrollback.
+    #[test]
+    fn history_occupancy_survives_the_viewport_growing_upward() {
+        let (width, height) = (20u16, 40u16);
+        let mut term = launched_at(width, height, /*prior_rows*/ 1);
+        term.set_viewport_area(Rect::new(/*x*/ 0, 33, width, 7));
+        term.note_history_rows_inserted(20);
+        assert_eq!(term.history_end_row(), 21, "history occupies rows 1..21");
+
+        // The composer grows to 15 rows, so the viewport top moves to 25 -- still
+        // below the last history row, so nothing is claimed and nothing is forgotten.
+        term.set_viewport_area(Rect::new(/*x*/ 0, 25, width, 15));
+
+        assert_eq!(
+            term.history_end_row(),
+            21,
+            "growing into blank rows must not move the history end row"
+        );
+        assert_eq!(
+            term.next_history_row(),
+            Some(21),
+            "the gap between history and the composer is still fillable"
+        );
+    }
+
+    /// Regression: the rows a growing viewport takes from history have to be scrolled
+    /// away, and that scroll has to be recorded -- otherwise the tracked end row stays
+    /// stale and later writes land on top of live content.
+    #[test]
+    fn scrolling_history_away_moves_the_end_row_up() {
+        let (width, height) = (20u16, 40u16);
+        let mut term = launched_at(width, height, /*prior_rows*/ 1);
+        term.set_viewport_area(Rect::new(/*x*/ 0, 33, width, 7));
+        term.note_history_rows_inserted(30);
+        assert_eq!(term.history_end_row(), 31);
+
+        // A viewport wanting row 25 downward overlaps history by 6 rows. The caller
+        // scrolls those away and records it, which is what keeps the model honest.
+        let bottom_y = 25;
+        let overlap = term.history_end_row().saturating_sub(bottom_y);
+        assert_eq!(overlap, 6, "six rows of history are in the viewport's way");
+        term.note_history_scrolled(overlap);
+        term.set_viewport_area(Rect::new(/*x*/ 0, bottom_y, width, 15));
+
+        assert_eq!(
+            term.history_end_row(),
+            bottom_y,
+            "history now ends exactly where the composer starts"
+        );
+        assert_eq!(
+            term.next_history_row(),
+            None,
+            "no gap left, so callers must scroll rather than write in place"
+        );
+    }
+
+    #[test]
+    fn bottom_anchor_waits_for_history_then_fires_once() {
+        let (width, height) = (20u16, 40u16);
+        let mut term = launched_at(width, height, /*prior_rows*/ 1);
+        term.set_viewport_area(Rect::new(/*x*/ 0, 1, width, 7));
+
+        // Before any history reaches scrollback the session header is still inside the
+        // viewport, so anchoring would drag it to the bottom along with the composer.
+        assert_eq!(term.bottom_aligned_y(/*height*/ 7, height), None);
+
+        // Inserting the header pushes the viewport down past the rows it wrote, which
+        // is what makes room for history above it.
+        term.set_viewport_area(Rect::new(/*x*/ 0, 7, width, 7));
+        term.note_history_rows_inserted(6);
+
+        assert_eq!(term.bottom_aligned_y(/*height*/ 7, height), Some(33));
+    }
+
+    #[test]
+    fn viewport_stays_bottom_aligned_when_the_composer_shrinks() {
+        let (width, height) = (20u16, 40u16);
+        let mut term = launched_at(width, height, /*prior_rows*/ 1);
+        term.set_viewport_area(Rect::new(/*x*/ 0, 7, width, 7));
+        term.note_history_rows_inserted(6);
+        assert_eq!(term.bottom_aligned_y(/*height*/ 7, height), Some(33));
+
+        // A shrinking composer must stay flush with the bottom. Floating upward leaves
+        // dead rows beneath it and makes `insert_history` stop filling the gap, because
+        // it recognizes bottom-anchoring by comparing `area.bottom()` to the screen.
+        assert_eq!(term.bottom_aligned_y(/*height*/ 5, height), Some(35));
+        assert_eq!(term.bottom_aligned_y(/*height*/ 12, height), Some(28));
     }
 }
