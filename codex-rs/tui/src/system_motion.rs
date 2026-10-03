@@ -1,8 +1,9 @@
 //! Reads the TUI host's accessibility preference once at launch.
 //!
 //! Detection never changes persisted configuration or consults the app server. An unavailable
-//! preference preserves configured behavior; an explicit request for less motion suppresses all
-//! effects governed by `tui.animations`. Restart the TUI after changing the OS preference.
+//! preference preserves configured behavior. Local settings use this preference as the default
+//! when `tui.animations` is not explicitly configured. Restart the TUI after changing the OS
+//! preference.
 
 use std::sync::OnceLock;
 
