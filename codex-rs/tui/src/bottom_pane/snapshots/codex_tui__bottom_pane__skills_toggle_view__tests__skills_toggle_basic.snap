@@ -8,7 +8,7 @@ expression: "render_lines(&view, 72)"
                                                                         
   Type to search skills                                                 
   >                                                                     
-› [x] Repo Scout        Summarize the repo layout                       
+❯ [x] Repo Scout        Summarize the repo layout                       
   [ ] Changelog Writer  Draft release notes                             
                                                                         
   Press space or enter to toggle; esc to close

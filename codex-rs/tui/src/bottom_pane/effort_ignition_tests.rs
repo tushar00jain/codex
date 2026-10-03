@@ -167,8 +167,8 @@ fn max_and_ultra_prompts_render_their_accent_and_glyph() {
         /*x*/ 0, /*y*/ 0, /*width*/ 1, /*height*/ 1,
     );
     for (tier, glyph, color) in [
-        (EffortTier::Max, "›", Color::Yellow),
-        (EffortTier::Ultra, "»", Color::Magenta),
+        (EffortTier::Max, "❯", Color::Yellow),
+        (EffortTier::Ultra, "❱", Color::Magenta),
     ] {
         let mut buf = Buffer::empty(area);
         tier.prompt_for(

@@ -105,10 +105,10 @@ async fn plugins_popup_uses_product_labels_for_remote_and_personal_tabs() {
     insta::assert_snapshot!(
         rows,
         @r###"
-        › [-] Buildkite Available Press Enter to install or view plugin details.
-        › [-] Docs Available Press Enter to install or view plugin details.
-        › [-] Link Share Available Press Enter to install or view plugin details.
-        › [-] Local Docs Available Press Enter to install or view plugin details.
+        ❯ [-] Buildkite Available Press Enter to install or view plugin details.
+        ❯ [-] Docs Available Press Enter to install or view plugin details.
+        ❯ [-] Link Share Available Press Enter to install or view plugin details.
+        ❯ [-] Local Docs Available Press Enter to install or view plugin details.
         "###
     );
 }

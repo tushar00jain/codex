@@ -1,8 +1,24 @@
 use ratatui::layout::Rect;
+use ratatui::style::Style;
+use ratatui::widgets::Block;
+use ratatui::widgets::Borders;
 
 pub(crate) mod highlight;
 pub(crate) mod line_utils;
 pub(crate) mod renderable;
+
+pub trait BlockExt {
+    fn hairline(self, style: Style) -> Self;
+}
+
+impl BlockExt for Block<'_> {
+    /// Brackets the block with hairline rules above and below it, leaving the
+    /// sides open. `Block::inner` yields the content rows between them.
+    fn hairline(self, style: Style) -> Self {
+        self.borders(Borders::TOP | Borders::BOTTOM)
+            .border_style(style)
+    }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Insets {

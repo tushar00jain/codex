@@ -42,8 +42,7 @@ async fn turn_start_failure_is_shown_without_exiting() -> Result<()> {
         .collect::<Vec<_>>()
         .join("\n");
     insta::assert_snapshot!(transcript, @r"
-    › hello
-
+    ❯ hello
     ■ Failed to start turn: turn/start failed in TUI: turn/start failed: thread not found: 123e4567-e89b-12d3-a456-426614174000 (code -32600)
     ");
 

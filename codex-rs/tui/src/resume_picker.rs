@@ -30,6 +30,7 @@ use crate::thread_transcript::load_session_transcript;
 use crate::tui::FrameRequester;
 use crate::tui::Tui;
 use crate::tui::TuiEvent;
+use crate::ui_consts::CHEVRON;
 use crate::wrapping::RtOptions;
 use crate::wrapping::adaptive_wrap_lines;
 use chrono::DateTime;
@@ -2746,7 +2747,7 @@ fn dense_column_text(text: &str, width: usize) -> String {
 fn selection_marker(is_selected: bool, is_expanded: bool) -> Span<'static> {
     match (is_selected, is_expanded) {
         (true, true) => "⌄ ".set_style(selected_session_style().bold()),
-        (true, false) => "❯ ".set_style(selected_session_style().bold()),
+        (true, false) => format!("{CHEVRON} ").set_style(selected_session_style().bold()),
         (false, _) => "  ".into(),
     }
 }

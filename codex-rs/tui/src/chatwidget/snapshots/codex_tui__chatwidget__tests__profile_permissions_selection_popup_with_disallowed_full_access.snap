@@ -13,7 +13,7 @@ expression: "render_bottom_popup(&chat, 80)"
                              access the internet without asking for approval.
                              Exercise caution when using. (disabled: Disabled
                              by requirements.)
-› 3. Read Only (current)     Codex can read files in the current workspace.
+❯ 3. Read Only (current)     Codex can read files in the current workspace.
                              Approval is required to edit files or access the
                              internet.
 

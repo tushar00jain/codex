@@ -7,7 +7,7 @@ expression: terminal_title_popup_snapshot(&mut chat)
 
   Type to search
   >
-› [x] monthly-limit  Remaining usage on the monthly usage limit (omitted when unavailable)
+❯ [x] monthly-limit  Remaining usage on the monthly usage limit (omitted when unavailable)
   [x] weekly-limit   Remaining usage on the weekly usage limit (omitted when unavailable)
   [ ] app-name       Codex app name
   [ ] project-name   Project name (falls back to current directory name)

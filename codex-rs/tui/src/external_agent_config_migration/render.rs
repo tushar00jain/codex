@@ -4,6 +4,7 @@ use crate::line_truncation::truncate_line_with_ellipsis_if_overflow;
 use crate::render::Insets;
 use crate::render::RectExt as _;
 use crate::selection_list::selection_option_row_with_dim;
+use crate::ui_consts::CHEVRON;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Constraint;
 use ratatui::layout::Layout;
@@ -45,7 +46,7 @@ impl ExternalAgentConfigMigrationScreen {
             let mut line = entry.line.clone();
             if selected {
                 if let Some(cursor) = line.spans.first_mut() {
-                    cursor.content = "› ".into();
+                    cursor.content = format!("{CHEVRON} ").into();
                 }
                 line.spans.iter_mut().for_each(|span| {
                     span.style = span.style.cyan().bold();

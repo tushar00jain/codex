@@ -31,6 +31,7 @@ use crate::terminal_palette::best_color_for_level;
 use crate::terminal_palette::default_bg;
 use crate::terminal_palette::default_fg;
 use crate::terminal_palette::effective_stdout_color_level;
+use crate::ui_consts::CHEVRON;
 
 #[path = "effort_ignition_styles.rs"]
 mod styles;
@@ -104,8 +105,8 @@ impl EffortTier {
 
     fn prompt_glyph(self) -> &'static str {
         match self {
-            Self::Max => "›",
-            Self::Ultra => "»",
+            Self::Max => CHEVRON,
+            Self::Ultra => "❱",
         }
     }
 

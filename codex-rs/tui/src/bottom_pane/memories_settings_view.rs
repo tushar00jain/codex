@@ -21,6 +21,7 @@ use crate::render::RectExt as _;
 use crate::render::renderable::ColumnRenderable;
 use crate::render::renderable::Renderable;
 use crate::style::user_message_style;
+use crate::ui_consts::CHEVRON;
 
 use super::CancellationEvent;
 use super::bottom_pane_view::BottomPaneView;
@@ -154,7 +155,7 @@ impl MemoriesSettingsView {
                 .enumerate()
                 .map(|(idx, name)| GenericDisplayRow {
                     name: if state.selected_idx == Some(idx) {
-                        format!("› {name}")
+                        format!("{CHEVRON} {name}")
                     } else {
                         format!("  {name}")
                     },
@@ -174,9 +175,9 @@ impl MemoriesSettingsView {
             .enumerate()
             .map(|(idx, item)| {
                 let prefix = if selected_idx == Some(idx) {
-                    '›'
+                    CHEVRON
                 } else {
-                    ' '
+                    " "
                 };
                 let (name, description) = match item {
                     MemoriesMenuItem::Setting {
