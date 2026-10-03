@@ -110,6 +110,7 @@ const RAW_DIFF_SUMMARY_WIDTH: usize = 10_000;
 const RAW_TOOL_OUTPUT_WIDTH: usize = 10_000;
 
 mod approvals;
+mod banner;
 mod base;
 mod exec;
 mod hook_cell;

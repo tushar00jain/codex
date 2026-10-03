@@ -2,6 +2,22 @@
 //!
 //! Codex uses the terminal scrollback itself for finalized chat history, so inserting a history
 //! cell is an escape-sequence operation rather than a normal ratatui render.
+//!
+//! # Gap filling is untested under multiplexers
+//!
+//! The composer is seated at the bottom on the first draw (see
+//! `Terminal::take_bottom_anchor`), which leaves blank rows between the launch
+//! point and the composer. The `Standard` path fills those rows directly instead
+//! of scrolling the region above, so the session header survives until the screen
+//! is full.
+//!
+//! That path has been exercised in Windows Terminal only. **tmux, Zellij, screen,
+//! and remote/SSH terminals are untested.** Multiplexers are exactly where this is
+//! most likely to break: they emulate `DECSTBM` themselves, and Zellij already
+//! needs `InsertHistoryMode::ZellijRaw` because it does not constrain soft-wrapped
+//! rows to Codex's scroll region. `ZellijRaw` computes its own viewport advance and
+//! is deliberately left alone here, so under Zellij the behavior is whatever that
+//! path already did -- neither verified nor intentionally supported.
 
 use std::fmt;
 use std::io;
@@ -115,6 +131,8 @@ where
     let mut area = terminal.viewport_area;
     let mut should_update_area = false;
     let last_cursor_pos = terminal.last_known_cursor_pos;
+    // Read before `backend_mut()` borrows the terminal below.
+    let gap_row = terminal.next_history_row();
 
     // Pre-wrap lines for terminal scrollback. Three paths:
     //
@@ -192,7 +210,7 @@ where
         }
         InsertHistoryMode::Standard => {
             let writer = terminal.backend_mut();
-            let cursor_top = if area.bottom() < screen_size.height {
+            let (cursor_top, write_at_cursor_top) = if area.bottom() < screen_size.height {
                 // If the viewport is not at the bottom of the screen, scroll it down to make room.
                 // Don't scroll it past the bottom of the screen.
                 let scroll_amount = wrapped_lines.min(screen_size.height - area.bottom());
@@ -208,9 +226,21 @@ where
                 let cursor_top = area.top().saturating_sub(1);
                 area.y += scroll_amount;
                 should_update_area = true;
-                cursor_top
+                (cursor_top, /*write_at_cursor_top*/ false)
+            } else if let Some(gap_row) = gap_row {
+                // The viewport is already at the bottom, so it cannot be pushed
+                // down to make room -- but blank rows remain between the last
+                // history row and the composer, which is the state a
+                // bottom-anchored startup leaves behind. Write into those rows
+                // instead of scrolling the top away, so the session header stays
+                // visible until the screen genuinely fills.
+                //
+                // A batch taller than the gap needs no special case: the cursor
+                // walks down to the region's last row and further newlines scroll
+                // it exactly as they do below.
+                (gap_row, /*write_at_cursor_top*/ true)
             } else {
-                area.top().saturating_sub(1)
+                (area.top().saturating_sub(1), /*write_at_cursor_top*/ false)
             };
 
             // Limit the scroll region to the lines from the top of the screen to the
@@ -235,8 +265,13 @@ where
             // fetch/restore the cursor position. insert_history_lines should be cursor-position-neutral :)
             queue!(writer, MoveTo(/*x*/ 0, cursor_top))?;
 
-            for line in &wrapped {
-                queue!(writer, Print("\r\n"))?;
+            // Each line is normally preceded by a newline, so `cursor_top` is the
+            // row *before* the first write. When filling a gap, `cursor_top` is
+            // the target row itself -- there may be no row above it to start from.
+            for (index, line) in wrapped.iter().enumerate() {
+                if index > 0 || !write_at_cursor_top {
+                    queue!(writer, Print("\r\n"))?;
+                }
                 write_history_line(writer, line, wrap_width)?;
             }
 
@@ -1061,6 +1096,81 @@ mod tests {
         assert!(
             url_row <= prompt_row + 2,
             "expected URL content to appear immediately after prompt (allowing at most one spacer row), got prompt_row={prompt_row}, url_row={url_row}, rows={rows:?}",
+        );
+    }
+
+    /// Terminal launched with `prior_rows` of shell output already on screen and
+    /// the composer already seated at the bottom, as `take_bottom_anchor` leaves
+    /// it on the first draw.
+    fn bottom_anchored_terminal(
+        width: u16,
+        height: u16,
+        prior_rows: u16,
+        composer_height: u16,
+    ) -> crate::custom_terminal::Terminal<VT100Backend> {
+        let mut term = crate::custom_terminal::Terminal::with_screen_size_and_cursor_position_for_test(
+            VT100Backend::new(width, height),
+            ratatui::layout::Size::new(width, height),
+            ratatui::layout::Position::new(/*x*/ 0, prior_rows),
+        );
+        term.set_viewport_area(Rect::new(
+            /*x*/ 0,
+            height - composer_height,
+            width,
+            composer_height,
+        ));
+        term
+    }
+
+    fn screen_rows(term: &crate::custom_terminal::Terminal<VT100Backend>, width: u16) -> Vec<String> {
+        let screen = term.backend().vt100().screen();
+        let (rows, _) = screen.size();
+        (0..rows)
+            .map(|row| {
+                (0..width)
+                    .map(|col| match screen.cell(row, col) {
+                        Some(cell) if !cell.contents().is_empty() => cell.contents(),
+                        _ => " ",
+                    })
+                    .collect::<String>()
+                    .trim_end()
+                    .to_string()
+            })
+            .collect()
+    }
+
+    #[test]
+    fn history_fills_the_gap_below_the_launch_row_before_scrolling() {
+        let (width, height) = (20u16, 10u16);
+        let mut term =
+            bottom_anchored_terminal(width, height, /*prior_rows*/ 2, /*composer_height*/ 2);
+
+        insert_history_lines(&mut term, vec![Line::from("first"), Line::from("second")])
+            .expect("insert history");
+
+        let rows = screen_rows(&term, width);
+        // Written at the launch row and the one below it -- not pushed up against
+        // the composer, and not over the two rows that preceded launch.
+        assert_eq!(rows[2], "first", "rows: {rows:?}");
+        assert_eq!(rows[3], "second", "rows: {rows:?}");
+        assert_eq!(rows[0], "", "row above the launch point must be untouched");
+        assert_eq!(rows[1], "", "row above the launch point must be untouched");
+    }
+
+    #[test]
+    fn history_keeps_filling_downward_across_separate_inserts() {
+        let (width, height) = (20u16, 10u16);
+        let mut term =
+            bottom_anchored_terminal(width, height, /*prior_rows*/ 0, /*composer_height*/ 2);
+
+        insert_history_lines(&mut term, vec![Line::from("one")]).expect("insert history");
+        insert_history_lines(&mut term, vec![Line::from("two")]).expect("insert history");
+
+        let rows = screen_rows(&term, width);
+        assert_eq!(rows[0], "one", "rows: {rows:?}");
+        assert_eq!(
+            rows[1], "two",
+            "the second insert must continue below the first, not overwrite it: {rows:?}"
         );
     }
 }
